@@ -4,13 +4,12 @@ Runs the existing heuristic AI and renders the board directly in a
 Google Colab notebook using Unicode blocks. No desktop window is needed.
 """
 
-import random
 import time
 
 from IPython.display import clear_output
 
-from board import WIDTH, empty_board
-from pieces import PIECES
+from board import WIDTH, new_board
+from pieces import random_piece
 from ai import find_best_move
 
 
@@ -18,7 +17,7 @@ BLOCK = "██"
 EMPTY = "  "
 
 
-def print_board(board, pieces_played, lines_total, x, rotation_index):
+def print_board(board, pieces_played, lines_total, x, rotation_index, piece_name):
     clear_output(wait=True)
 
     print("TETRIS AI")
@@ -31,16 +30,17 @@ def print_board(board, pieces_played, lines_total, x, rotation_index):
     print("+" + "--" * WIDTH + "+")
     print(f"Pieces played: {pieces_played}")
     print(f"Lines cleared: {lines_total}")
+    print(f"Piece: {piece_name}")
     print(f"Move: x={x}, rotation={rotation_index}")
 
 
 def main(delay=0.15):
-    board = empty_board()
+    board = new_board()
     lines_total = 0
     pieces_played = 0
 
     while True:
-        shape = random.choice(PIECES)
+        piece_name, shape = random_piece()
         move = find_best_move(board, shape)
 
         if move is None:
@@ -57,7 +57,14 @@ def main(delay=0.15):
         lines_total += lines
         pieces_played += 1
 
-        print_board(board, pieces_played, lines_total, x, rotation_index)
+        print_board(
+            board,
+            pieces_played,
+            lines_total,
+            x,
+            rotation_index,
+            piece_name,
+        )
         time.sleep(delay)
 
 
