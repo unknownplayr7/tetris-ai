@@ -15,6 +15,9 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from board import HEIGHT, WIDTH
+PIECE_COLORS = {"I": "#50d9e7", "O": "#f6ca58", "T": "#bb8aff", "S": "#69df94", "Z": "#ff718b", "J": "#78a6ff", "L": "#ffa05c"}
+
 ROOT = Path(__file__).resolve().parent
 RUNS = ROOT / "runs"
 
@@ -89,27 +92,64 @@ def start_training(config, resume_path=None):
     st.session_state.trainer_command = command
 
 
+
+def board_markup(board, overlay=None, piece_color=None):
+    """Render a 20x10 board; overlay contains (row, column) placement cells."""
+    overlay = overlay or set()
+    cells = []
+    for y, row in enumerate(board):
+        for x, occupied in enumerate(row):
+            if (y, x) in overlay:
+                style, cls = "background:" + (piece_color or "#50d9e7") + ";border-color:#ffffff55;", "cell piece"
+            elif occupied:
+                style, cls = "background:#37aebd;border-color:#7de5ed;", "cell filled"
+            else:
+                style, cls = "", "cell"
+            cells.append(f'<div class="{cls}" style="{style}"></div>')
+    return '<div class="tetris-board" role="img" aria-label="Tetris board, 20 rows by 10 columns">' + "".join(cells) + "</div>"
+
+
+def landing_overlay(row):
+    shape = row.get("viz_shape")
+    if not isinstance(shape, list):
+        return set()
+    try:
+        x0, y0 = int(row["viz_x"]), int(row["viz_y"])
+    except (TypeError, ValueError, KeyError):
+        return set()
+    return {
+        (y0 + dy, x0 + dx)
+        for dy, cells in enumerate(shape)
+        for dx, filled in enumerate(cells)
+        if filled and 0 <= y0 + dy < HEIGHT and 0 <= x0 + dx < WIDTH
+    }
+
+
 st.set_page_config(page_title="Tetris RL Lab", page_icon="▦", layout="wide")
 st.markdown("""
 <style>
 .block-container {padding-top: 1.4rem; padding-bottom: 2rem;}
 [data-testid="stMetric"] {background:#101827; border:1px solid #273449; padding:14px 16px; border-radius:12px;}
+.tetris-board {display:grid;grid-template-columns:repeat(10,minmax(10px,1fr));gap:2px;background:#0b1020;border:1px solid #394763;padding:5px;border-radius:7px;width:100%;max-width:330px;box-sizing:border-box}
+.tetris-board .cell {aspect-ratio:1;background:#141c2d;border:1px solid #26324a;border-radius:2px;min-width:0}
+.tetris-board .cell.filled {box-shadow:inset 0 1px 0 #ffffff22}
+.tetris-board .cell.piece {box-shadow:inset 0 1px 0 #ffffff66}
 div[data-testid="stAlert"] {border-radius:10px;}
 </style>
 """, unsafe_allow_html=True)
 
 st.title("▦ TETRIS RL LAB")
 st.caption("PROXIMAL POLICY OPTIMIZATION  /  ACTOR–CRITIC  /  LIVE TRAINING TELEMETRY")
-st.markdown("A fresh run starts from randomly initialized weights. Training only resumes from a checkpoint when you explicitly provide one.")
+st.markdown("A fresh run starts from random weights. Training resumes only when you explicitly provide a checkpoint. Board snapshots come from real sampled training actions.")
 
 with st.sidebar:
     st.header("Experiment setup")
-    updates = st.number_input("Training updates", min_value=1, max_value=100000, value=1000, step=100)
-    envs = st.number_input("Parallel environments", min_value=1, max_value=256, value=16)
-    rollout = st.number_input("Steps per environment / update", min_value=8, max_value=2048, value=128, step=8)
-    epochs = st.number_input("PPO epochs", min_value=1, max_value=20, value=4)
+    updates = st.number_input("Training updates", min_value=1, max_value=100000, value=1000, step=100, help="One update collects a batch of moves, then optimizes the policy on that batch.")
+    envs = st.number_input("Parallel environments", min_value=1, max_value=256, value=16, help="Independent Tetris games contribute experience to each update. More environments use more CPU/RAM.")
+    rollout = st.number_input("Steps per environment / update", min_value=8, max_value=2048, value=128, step=8, help="How many placements each game contributes before the model is updated.")
+    epochs = st.number_input("PPO epochs", min_value=1, max_value=20, value=4, help="How many passes PPO makes over the collected batch. Too many can overfit a rollout.")
     minibatch_size = st.select_slider("Minibatch size", options=[32, 64, 128, 256, 512, 1024], value=256)
-    lr = st.select_slider("Learning rate", options=[0.00003, 0.0001, 0.00025, 0.0003, 0.001], value=0.00025, format_func=lambda x: f"{x:g}")
+    lr = st.select_slider("Learning rate", options=[0.00003, 0.0001, 0.00025, 0.0003, 0.001], value=0.00025, format_func=lambda x: f"{x:g}", help="Size of neural-network weight updates. Too high can destabilize learning.")
     seed = st.number_input("Random seed", min_value=0, max_value=2**31 - 1, value=7)
     device = st.selectbox("Compute device", ["auto", "mps", "cpu", "cuda"], index=0)
     st.divider()
@@ -193,7 +233,35 @@ def live_telemetry(active_run):
     value = latest.get("mean_lines_100")
     cols[4].metric("Mean lines · last 100", "n/a" if pd.isna(value) else f"{value:.2f}")
 
-    tabs = st.tabs(["Learning", "Optimization", "Episode performance", "Run details"])
+
+    st.header("What the agent is doing")
+    st.markdown("This snapshot is the **last sampled action from environment 1 in this update**, recorded before PPO changes the weights. The left board shows the state before the move with the selected placement overlaid; the right board shows the resulting board after line clearing.")
+    if len(df) > 1:
+        replay_index = st.slider("Replay a recorded update", min_value=0, max_value=len(df) - 1, value=len(df) - 1, help="Scrub through snapshots saved at each training update.")
+    else:
+        replay_index = 0
+    frame = df.iloc[replay_index]
+    before, after = frame.get("viz_board_before"), frame.get("viz_board")
+    piece_name = frame.get("viz_piece")
+    if isinstance(before, list) and isinstance(after, list):
+        board_cols = st.columns(2)
+        with board_cols[0]:
+            st.markdown("**Before move + selected placement**")
+            st.markdown(board_markup(before, landing_overlay(frame), PIECE_COLORS.get(piece_name)), unsafe_allow_html=True)
+        with board_cols[1]:
+            st.markdown("**After move**")
+            st.markdown(board_markup(after), unsafe_allow_html=True)
+        move_cols = st.columns(5)
+        move_cols[0].metric("Piece", str(piece_name or "n/a"))
+        move_cols[1].metric("Rotation slot", str(frame.get("viz_rotation", "n/a")))
+        move_cols[2].metric("Column", str(frame.get("viz_x", "n/a")))
+        move_cols[3].metric("Reward", f"{float(frame.get('viz_reward', 0)):+.3f}")
+        move_cols[4].metric("Lines cleared", str(frame.get("viz_lines", 0)))
+        st.caption(f"Action ID {int(frame.get('viz_action', -1))} · {int(frame.get('viz_valid_actions', 0))} legal placements were available · landing row {frame.get('viz_y', 'n/a')} · {'episode ended' if bool(frame.get('viz_done', False)) else 'episode continues'}.")
+    else:
+        st.info("This run's metrics predate board snapshots. Start a new run to capture gameplay visuals.")
+
+    tabs = st.tabs(["Learning", "Optimization", "Episode performance", "Metric glossary", "Run details"])
     with tabs[0]:
         st.subheader("Reward and return")
         reward_cols = [c for c in ("mean_reward", "mean_episode_return_100") if c in df and df[c].notna().any()]
@@ -211,14 +279,30 @@ def live_telemetry(active_run):
         diag_cols = [c for c in ("entropy", "approx_kl", "clip_fraction", "learning_rate") if c in df and df[c].notna().any()]
         if diag_cols:
             st.line_chart(df.set_index("update")[diag_cols], height=240)
-        st.caption("KL and clip fraction help spot overly large policy updates; entropy is a rough indicator of policy exploration.")
+        st.caption("Policy loss is the PPO objective, not a skill score. Value loss is critic prediction error. Entropy describes how spread out action probabilities are. Approximate KL estimates how much the policy shifted; spikes can signal aggressive updates. Clip fraction is the share of samples hitting PPO’s update limit. None should be interpreted alone.")
     with tabs[2]:
         st.subheader("Game performance")
         perf_cols = [c for c in ("mean_lines_100", "mean_pieces_100", "mean_completed_lines", "mean_completed_pieces") if c in df and df[c].notna().any()]
         if perf_cols:
             st.line_chart(df.set_index("update")[perf_cols], height=260)
         st.dataframe(df.tail(15).iloc[::-1], use_container_width=True, hide_index=True)
+
     with tabs[3]:
+        st.markdown("""### PPO in plain English
+
+- **PPO (Proximal Policy Optimization):** improves the policy from recent experience while limiting how much one update can change its decisions.
+- **Actor:** scores legal placements. **Critic:** estimates future reward for a board state.
+- **Reward:** each move earns 0.05 + lines² - 0.08 × holes - 0.01 × stack height; game over adds -2. This shaped reward is a learning signal, not the same thing as winning Tetris.
+- **GAE:** combines rewards and value predictions to estimate whether an action did better or worse than expected.
+- **Policy loss:** the policy optimization objective. Its absolute value is not a direct measure of playing skill.
+- **Value loss:** squared error between the critic estimate and return target. Lower can mean better predictions, but the scale depends on rewards.
+- **Entropy:** how spread out action probabilities are. Higher usually means more exploration; lower can mean fewer choices, not necessarily better choices.
+- **Approx. KL:** estimates how much the policy changed during an update. Sudden large spikes can mean updates are too aggressive.
+- **Clip fraction:** share of samples whose policy ratio hit PPO's clipping limit. Persistently high values can mean many updates are hitting the safeguard.
+- **Advantage:** estimated benefit of an action versus the critic baseline. **Return:** accumulated discounted reward target used to train the critic.
+- **SPS:** environment placements processed per second; it measures throughput, not AI quality.""")
+        st.warning("No single metric proves the AI is improving. Compare episode return, pieces survived, lines cleared, and the heuristic baseline across multiple random seeds.")
+    with tabs[4]:
         st.json({
             "run_directory": str(active_run),
             "device": latest.get("device"),
