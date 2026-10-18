@@ -86,13 +86,13 @@ Replace that example path with the actual checkpoint path. If you do not pass `-
 
 Training reward is a learning signal, not proof that the policy plays better Tetris. Use the evaluator to compare random legal actions, a heuristic using only the current piece, the game's one-piece-lookahead heuristic, and (optionally) a trained PPO checkpoint on the **same held-out episode seeds**. The PPO observation currently includes only the current piece, so the lookahead heuristic has extra preview information; compare it as the real-game baseline, not as an information-matched policy.
 
-Compare the two built-in baselines:
+Compare the built-in baselines:
 
 ```bash
 python evaluate.py --episodes 30 --seed 1000 --output runs/baseline-benchmark.json
 ```
 
-Compare a trained checkpoint against both baselines:
+Compare a trained checkpoint against all baselines:
 
 ```bash
 python evaluate.py --episodes 30 --seed 1000 --checkpoint runs/ppo-YYYYMMDD-HHMMSS/checkpoint.pt --output runs/ppo-benchmark.json
