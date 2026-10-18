@@ -45,6 +45,8 @@ class TrainingSmokeTests(unittest.TestCase):
 
             config = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
             self.assertEqual(config["args"]["updates"], 1)
+            self.assertEqual(config["args"]["run_dir"], "smoke-run")
+            self.assertIsNone(config["args"]["resume"])
             with (run_dir / "metrics.jsonl").open(encoding="utf-8") as handle:
                 rows = [json.loads(line) for line in handle if line.strip()]
             self.assertEqual(len(rows), 1)
