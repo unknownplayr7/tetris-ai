@@ -78,9 +78,31 @@ def main():
     device = choose_device(args.device)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = Path(args.run_dir or Path("runs") / f"ppo-{stamp}")
+    if run_dir.exists():
+        existing_entries = [
+            path for path in run_dir.iterdir()
+            if not (path.name == "trainer.log" and path.is_file() and path.stat().st_size == 0)
+        ]
+        if existing_entries and not args.resume:
+            raise SystemExit(
+                f"Run directory is not empty: {run_dir}. Choose a new directory or "
+                "pass --resume explicitly to append to an existing run."
+            )
     run_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = run_dir / "metrics.jsonl"
     checkpoint_path = run_dir / "checkpoint.pt"
+    config_path = run_dir / "config.json"
+    if not config_path.exists():
+        config = {
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "args": vars(args),
+            "device": str(device),
+            "observation_size": int(obs.shape[1]),
+            "action_count": int(envs[0].valid_action_mask().size),
+            "piece_randomizer": "seven-bag",
+            "resume_checkpoint_name": Path(args.resume).name if args.resume else None,
+        }
+        config_path.write_text(json.dumps(config, indent=2) + "\\n", encoding="utf-8")
     print(f"Device: {device} | run: {run_dir}", flush=True)
     print("Mode: resume" if args.resume else "Mode: fresh random initialization", flush=True)
 
