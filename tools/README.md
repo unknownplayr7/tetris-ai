@@ -10,7 +10,7 @@ From the repository root:
 python tools/board_inspector.py tools/sample_board.txt
 ```
 
-Pass any text file containing exactly 20 rows of 10 cells. Use `#` for filled cells and `.` for empty cells. The parser also accepts `1`, `X`, and `@` as filled cells, and `0` or spaces as empty cells. Blank lines are ignored.
+Pass any text file containing exactly 20 rows of 10 cells. Use `#` for filled cells and `.` for empty cells. The parser also accepts `1`, `X`, and `@` as filled cells, and `0` as an empty cell. Blank lines are ignored.
 
 ## Metrics
 
