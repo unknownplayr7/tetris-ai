@@ -38,6 +38,7 @@ def main():
         log_probs = []
         values = []
         rewards = []
+        dones = []
         entropies = []
         episode_lines = 0
         finished = 0
@@ -66,6 +67,7 @@ def main():
             log_probs.append(dist.log_prob(actions))
             values.append(value)
             rewards.append(torch.tensor(reward_row, dtype=torch.float32, device=device))
+            dones.append(torch.tensor(done_row, dtype=torch.float32, device=device))
             entropies.append(dist.entropy())
             obs = np.stack(next_obs)
 
@@ -77,19 +79,22 @@ def main():
 
         returns = []
         running = bootstrap_value
-        for reward in reversed(rewards):
-            running = reward + args.gamma * running
+        for reward, done in zip(reversed(rewards), reversed(dones)):
+            # A finished episode must not bootstrap from the next reset game.
+            running = reward + args.gamma * running * (1.0 - done)
             returns.append(running)
         returns.reverse()
 
         returns_t = torch.stack(returns)
         values_t = torch.stack(values)
         log_probs_t = torch.stack(log_probs)
-        advantages = returns_t - values_t
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        raw_advantages = returns_t - values_t
+        policy_advantages = (
+            raw_advantages - raw_advantages.mean()
+        ) / (raw_advantages.std() + 1e-8)
 
-        policy_loss = -(log_probs_t * advantages.detach()).mean()
-        value_loss = advantages.pow(2).mean()
+        policy_loss = -(log_probs_t * policy_advantages.detach()).mean()
+        value_loss = raw_advantages.pow(2).mean()
         entropy_bonus = torch.stack(entropies).mean()
         loss = policy_loss + 0.5 * value_loss - 0.01 * entropy_bonus
 
