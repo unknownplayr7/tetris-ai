@@ -45,7 +45,6 @@ class TetrisEnv:
         for r, rotated in enumerate(rots):
             shape_width = len(rotated[0])
             for x in range(WIDTH - shape_width + 1):
-                _, lines = simulate_drop(self.board, rotated, x)
                 # A legal spawn may clear zero lines, so check the result directly.
                 result, _ = simulate_drop(self.board, rotated, x)
                 if result is not None:
