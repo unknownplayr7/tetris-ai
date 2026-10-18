@@ -21,10 +21,9 @@ RUNS = ROOT / "runs"
 
 
 def tail_text(path, lines=35):
-    try:
-        return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:])
-    except OSError:
-        return "No training log yet."
+    return "\n".join(
+        line.decode("utf-8", errors="replace") for line in _tail_lines(path, lines)
+    ) or "No training log yet."
 
 
 def _tail_lines(path, max_lines=5000):
@@ -298,6 +297,13 @@ def live_telemetry(active_run):
         st.subheader("Telemetry")
         st.write("Metrics will appear here after the first PPO update.")
         return
+    proc_handle = st.session_state.get("trainer_process")
+    if proc_handle is not None and proc_handle.poll() is not None:
+        log_handle = st.session_state.get("trainer_log_handle")
+        if log_handle is not None and not log_handle.closed:
+            log_handle.close()
+        st.session_state.trainer_log_handle = None
+
     df = load_metrics(active_run)
     if df.empty:
         st.subheader("Telemetry")
@@ -374,9 +380,11 @@ def live_telemetry(active_run):
         log_path = Path(active_run) / "trainer.log"
         st.subheader("Trainer output")
         st.code(tail_text(log_path), language="text")
+        recent_metrics = b"\n".join(_tail_lines(Path(active_run) / "metrics.jsonl", 5000))
         st.download_button(
-            "Download metrics JSONL", data=(Path(active_run) / "metrics.jsonl").read_bytes(),
-            file_name="metrics.jsonl", mime="application/x-ndjson",
+            "Download latest 5,000 metric records",
+            data=recent_metrics + (b"\n" if recent_metrics else b""),
+            file_name="metrics-latest.jsonl", mime="application/x-ndjson",
         )
 
 move_replay(run_dir)
