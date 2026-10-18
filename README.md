@@ -82,6 +82,26 @@ python train.py --updates 500 --resume runs/ppo-YYYYMMDD-HHMMSS/checkpoint.pt
 
 Replace that example path with the actual checkpoint path. If you do not pass `--resume`, a fresh randomly initialized model is created.
 
+## Reproducible evaluation and benchmarking
+
+Training reward is a learning signal, not proof that the policy plays better Tetris. Use the evaluator to compare the random legal-action baseline, the existing heuristic agent, and (optionally) a trained PPO checkpoint on the **same held-out episode seeds**.
+
+Compare the two built-in baselines:
+
+```bash
+python evaluate.py --episodes 30 --seed 1000 --output runs/baseline-benchmark.json
+```
+
+Compare a trained checkpoint against both baselines:
+
+```bash
+python evaluate.py --episodes 30 --seed 1000 --checkpoint runs/ppo-YYYYMMDD-HHMMSS/checkpoint.pt --output runs/ppo-benchmark.json
+```
+
+The report contains per-episode lines, pieces survived, return, truncation status, and approximate 95% confidence intervals for each metric. Every policy receives the same list of seeds, and the environment uses a reproducible seven-bag piece randomizer to match the playable game more closely. The PPO policy acts deterministically by selecting its highest-scoring legal placement. Evaluation does not update model weights. Use several different base seeds before drawing conclusions; the confidence interval is a useful uncertainty estimate, not a guarantee.
+
+Training also writes **config.json** alongside the logs and checkpoint so the run's parameters, device, observation/action sizes, and piece-randomizer version are recorded. To avoid accidental loss of existing logs, a non-empty **--run-dir** is rejected unless **--resume** is explicitly supplied.
+
 ## Project structure
 
 - `main.py` - Pygame game UI and heuristic autoplay
