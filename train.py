@@ -20,8 +20,8 @@ from board import WIDTH, drop_y
 from pieces import rotations
 from move_log import append_move, open_move_log
 
-from model import TetrisActorCritic
-from tetris_env import TetrisEnv
+from model import OBS_SIZE, TetrisActorCritic
+from tetris_env import MAX_ACTIONS, TetrisEnv
 
 
 def choose_device(requested):
@@ -97,8 +97,8 @@ def main():
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "args": vars(args),
             "device": str(device),
-            "observation_size": int(obs.shape[1]),
-            "action_count": int(envs[0].valid_action_mask().size),
+            "observation_size": OBS_SIZE,
+            "action_count": MAX_ACTIONS,
             "piece_randomizer": "seven-bag",
             "resume_checkpoint_name": Path(args.resume).name if args.resume else None,
         }
