@@ -39,6 +39,14 @@ class TetrisEnv:
         self.piece_name = self._bag.pop()
         self.shape = [row[:] for row in SHAPES[self.piece_name]]
 
+    def peek_next_shape(self):
+        """Return a copy of the next tetromino shape without consuming it."""
+        if not self._bag:
+            self._bag = list(PIECE_NAMES)
+            self.rng.shuffle(self._bag)
+        next_name = self._bag[-1]
+        return [row[:] for row in SHAPES[next_name]]
+
     def observation(self):
         board = board_features(self.board).reshape(-1)
         piece = np.zeros(len(PIECE_NAMES), dtype=np.float32)
