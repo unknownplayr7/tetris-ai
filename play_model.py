@@ -26,7 +26,9 @@ def main():
     parser.add_argument("--delay", type=float, default=0.08)
     args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    has_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    device_name = "cuda" if torch.cuda.is_available() else "mps" if has_mps else "cpu"
+    device = torch.device(device_name)
     checkpoint = torch.load(args.checkpoint, map_location=device)
     model = TetrisActorCritic().to(device)
     model.load_state_dict(checkpoint["model_state"])
