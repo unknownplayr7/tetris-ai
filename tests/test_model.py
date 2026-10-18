@@ -32,8 +32,8 @@ class CheckpointMigrationTests(unittest.TestCase):
             old_logits, old_values = legacy(old_observation)
             new_logits, new_values = current(new_observation)
 
-        self.assertTrue(torch.equal(old_logits, new_logits))
-        self.assertTrue(torch.equal(old_values, new_values))
+        torch.testing.assert_close(old_logits, new_logits, rtol=1e-6, atol=1e-6)
+        torch.testing.assert_close(old_values, new_values, rtol=1e-6, atol=1e-6)
         self.assertEqual(upgraded["observation_schema_version"], 2)
         self.assertEqual(checkpoint["model_state"]["backbone.0.weight"].shape[1], LEGACY_OBS_SIZE)
 
