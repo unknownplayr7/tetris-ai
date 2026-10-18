@@ -102,7 +102,7 @@ def main():
             "piece_randomizer": "seven-bag",
             "resume_checkpoint_name": Path(args.resume).name if args.resume else None,
         }
-        config_path.write_text(json.dumps(config, indent=2) + "\\n", encoding="utf-8")
+        config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     print(f"Device: {device} | run: {run_dir}", flush=True)
     print("Mode: resume" if args.resume else "Mode: fresh random initialization", flush=True)
 
