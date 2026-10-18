@@ -29,7 +29,7 @@ def main():
     has_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
     device_name = "cuda" if torch.cuda.is_available() else "mps" if has_mps else "cpu"
     device = torch.device(device_name)
-    checkpoint = torch.load(args.checkpoint, map_location=device)
+    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
     model = TetrisActorCritic().to(device)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
