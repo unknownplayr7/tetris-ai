@@ -47,6 +47,20 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(set(first[:7]), set(SHAPES))
         self.assertEqual(set(first[7:14]), set(SHAPES))
 
+    def test_peeking_next_piece_does_not_consume_it(self):
+        def sequence(peek):
+            env = TetrisEnv(seed=51)
+            env.reset()
+            names = []
+            for _ in range(21):
+                if peek:
+                    env.peek_next_shape()
+                names.append(env.piece_name)
+                env._next_piece()
+            return names
+
+        self.assertEqual(sequence(False), sequence(True))
+
     def test_negative_action_is_rejected(self):
         env = TetrisEnv(seed=4)
         env.reset()
