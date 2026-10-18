@@ -33,7 +33,7 @@ The game includes a ghost landing guide, next-piece preview, score/line/level st
 
 ## RL lab: train from scratch
 
-The RL system is separate from the heuristic AI. Training uses a PyTorch actor-critic policy optimized with **Proximal Policy Optimization (PPO)**, generalized advantage estimation (GAE), legal-action masking, and reward/optimization telemetry.
+The RL system is separate from the heuristic AI. Training uses a PyTorch actor-critic policy optimized with **Proximal Policy Optimization (PPO)**, generalized advantage estimation (GAE), legal-action masking, and reward/optimization telemetry. The observation includes the board, current piece, and next-piece preview. Legacy checkpoints are automatically upgraded by zero-padding the new input weights, preserving their old policy outputs initially and retaining compatible optimizer state when resuming.
 
 ### Technical dashboard (recommended)
 
@@ -84,7 +84,7 @@ Replace that example path with the actual checkpoint path. If you do not pass `-
 
 ## Reproducible evaluation and benchmarking
 
-Training reward is a learning signal, not proof that the policy plays better Tetris. Use the evaluator to compare random legal actions, a heuristic using only the current piece, the game's one-piece-lookahead heuristic, and (optionally) a trained PPO checkpoint on the **same held-out episode seeds**. The PPO observation currently includes only the current piece, so the lookahead heuristic has extra preview information; compare it as the real-game baseline, not as an information-matched policy.
+Training reward is a learning signal, not proof that the policy plays better Tetris. Use the evaluator to compare random legal actions, a heuristic using only the current piece, the game's one-piece-lookahead heuristic, and (optionally) a trained PPO checkpoint on the **same held-out episode seeds**. The PPO observation includes the next-piece preview, making the lookahead heuristic a closer information-matched baseline, although their decision algorithms still differ.
 
 Compare the built-in baselines:
 
@@ -108,7 +108,7 @@ Training also writes **config.json** alongside the logs and checkpoint so the ru
 - `board.py`, `pieces.py` - board simulation and tetromino definitions
 - `ai.py` - heuristic baseline
 - `tetris_env.py` - placement-based RL environment and legal-action masks
-- `model.py` - actor-critic policy/value network
+- `model.py` - actor-critic policy/value network and legacy checkpoint migration
 - `train.py` - fresh-start PPO trainer, GAE, metrics, and checkpointing
 - `dashboard.py` - local Streamlit training dashboard
 - `play_model.py` - simple notebook-oriented model viewer

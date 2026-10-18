@@ -15,7 +15,7 @@ import torch
 
 from ai import find_best_move
 from board import WIDTH
-from model import TetrisActorCritic
+from model import TetrisActorCritic, upgrade_legacy_checkpoint
 from tetris_env import TetrisEnv
 
 
@@ -43,6 +43,7 @@ def load_policy(checkpoint_path, device):
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     if not isinstance(checkpoint, dict) or "model_state" not in checkpoint:
         raise ValueError("Checkpoint must be a training checkpoint with 'model_state'.")
+    checkpoint = upgrade_legacy_checkpoint(checkpoint)
     model = TetrisActorCritic().to(device)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
