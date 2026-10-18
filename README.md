@@ -53,7 +53,7 @@ The dashboard lets you:
 - Replay board snapshots of real sampled training actions, including the chosen piece, rotation, column, reward, legal placements, and resulting board.
 - Monitor reward/return, lines cleared, pieces survived, environment steps per second, policy/value losses, entropy, approximate KL divergence, and PPO clip fraction.
 - Read a plain-English glossary explaining PPO, GAE, reward shaping, and optimization metrics.
-- Inspect recent metric rows and trainer logs, and download the metrics file.
+- Inspect recent metric rows and trainer logs, and download the latest 5,000 metric records.
 - Stop the training process from the sidebar.
 
 Runs are stored in `runs/ppo-<timestamp>/`, with `metrics.jsonl`, `moves.jsonl`, `moves.idx`, `trainer.log`, and `checkpoint.pt`. The move replay records **every placement from training environment 1**, including the before/after board, chosen piece, rotation, column, landing row, reward, lines, legal-action count, episode ID, and game-over state. Use Previous/Next, the move slider, or autoplay to inspect the sequence. The other parallel environments still train the policy but are not duplicated into the visual log, keeping storage manageable. The fixed-width `moves.idx` file lets the dashboard load a selected move without loading every board into memory. Checkpoints contain model and optimizer state, update count, and environment-step count.
