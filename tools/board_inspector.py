@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Inspect a Tetris board from a plain-text 20x10 grid.
 
-Use '#' (or '1' or 'X') for occupied cells and '.' (or '0' or space) for
+Use '#' (or '1', 'X', or '@') for occupied cells and '.' (or '0') for
 empty cells. The input file must contain exactly 20 rows of 10 cells.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ import sys
 WIDTH = 10
 HEIGHT = 20
 FILLED = {"#", "1", "X", "x", "@"}
-EMPTY = {".", "0", " "}
+EMPTY = {".", "0"}
 
 
 def parse_board(text: str) -> list[list[int]]:
