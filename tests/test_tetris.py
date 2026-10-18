@@ -32,6 +32,18 @@ class BoardTests(unittest.TestCase):
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_observation_includes_current_and_next_piece(self):
+        env = TetrisEnv(seed=15)
+        observation = env.reset()
+        board_size = HEIGHT * WIDTH
+        piece_count = len(SHAPES)
+        current = observation[board_size:board_size + piece_count]
+        next_piece = observation[board_size + piece_count:]
+        self.assertEqual(float(current.sum()), 1.0)
+        self.assertEqual(float(next_piece.sum()), 1.0)
+        self.assertEqual(int(current.argmax()), list(SHAPES).index(env.piece_name))
+        self.assertEqual(int(next_piece.argmax()), list(SHAPES).index(env.peek_next_piece_name()))
+
     def test_seven_bag_contains_each_piece_once_and_is_seeded(self):
         def sequence(seed):
             env = TetrisEnv(seed=seed)
@@ -74,7 +86,7 @@ class EnvironmentTests(unittest.TestCase):
         observation = env.reset()
         mask = env.valid_action_mask()
 
-        self.assertEqual(observation.shape, (HEIGHT * WIDTH + len(SHAPES),))
+        self.assertEqual(observation.shape, (HEIGHT * WIDTH + 2 * len(SHAPES),))
         self.assertTrue(mask.any())
 
         action = int(mask.nonzero()[0][0])
