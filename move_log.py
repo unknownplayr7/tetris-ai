@@ -25,9 +25,9 @@ def open_move_log(moves_path, index_path, append=False):
     moves_path, index_path = Path(moves_path), Path(index_path)
     moves_path.parent.mkdir(parents=True, exist_ok=True)
     if append and moves_path.exists():
-        if (not index_path.exists()
-                or index_path.stat().st_size % INDEX_RECORD_BYTES != 0):
-            rebuild_index(moves_path, index_path)
+        # Rebuild once on resume to recover cleanly if the previous run was
+        # interrupted between writing a move and writing its index entry.
+        rebuild_index(moves_path, index_path)
     else:
         index_path.write_bytes(b"")
     return (
