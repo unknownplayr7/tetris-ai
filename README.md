@@ -33,7 +33,7 @@ The game includes a ghost landing guide, next-piece preview, score/line/level st
 
 ## RL lab: train from scratch
 
-The RL system is separate from the heuristic AI. Training uses a PyTorch actor-critic policy optimized with **Proximal Policy Optimization (PPO)**, generalized advantage estimation (GAE), legal-action masking, and reward/optimization telemetry.
+The RL system is separate from the heuristic AI. Training uses a PyTorch actor-critic policy optimized with **Proximal Policy Optimization (PPO)**, generalized advantage estimation (GAE), legal-action masking, and reward/optimization telemetry. The observation includes the board, current piece, and next-piece preview. Legacy checkpoints are automatically upgraded by zero-padding the new input weights, preserving their old policy outputs initially and retaining compatible optimizer state when resuming.
 
 ### Technical dashboard (recommended)
 
@@ -108,7 +108,7 @@ Training also writes **config.json** alongside the logs and checkpoint so the ru
 - `board.py`, `pieces.py` - board simulation and tetromino definitions
 - `ai.py` - heuristic baseline
 - `tetris_env.py` - placement-based RL environment and legal-action masks
-- `model.py` - actor-critic policy/value network
+- `model.py` - actor-critic policy/value network and legacy checkpoint migration
 - `train.py` - fresh-start PPO trainer, GAE, metrics, and checkpointing
 - `dashboard.py` - local Streamlit training dashboard
 - `play_model.py` - simple notebook-oriented model viewer
