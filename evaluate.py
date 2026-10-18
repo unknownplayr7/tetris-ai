@@ -19,7 +19,7 @@ from model import TetrisActorCritic
 from tetris_env import TetrisEnv
 
 
-POLICIES = ("random", "heuristic", "ppo")
+POLICIES = ("random", "heuristic", "heuristic-lookahead", "ppo")
 
 
 def choose_device(requested):
@@ -73,8 +73,9 @@ def select_action(policy_name, env, rng, model=None, device=None):
     if policy_name == "random":
         return int(rng.choice(legal_actions.tolist()))
 
-    if policy_name == "heuristic":
-        move = find_best_move(env.board, env.shape)
+    if policy_name in ("heuristic", "heuristic-lookahead"):
+        next_shape = env.peek_next_shape() if policy_name == "heuristic-lookahead" else None
+        move = find_best_move(env.board, env.shape, next_shape=next_shape)
         if move is None:
             return None
         rotation_index, _rotated, x_position, _result, _lines = move
@@ -151,7 +152,7 @@ def run_evaluation(episodes=20, seed=1000, checkpoint=None, policies=None,
         raise ValueError("max_pieces must be at least 1.")
 
     if policies is None:
-        policies = ["random", "heuristic"] + (["ppo"] if checkpoint else [])
+        policies = ["random", "heuristic", "heuristic-lookahead"] + (["ppo"] if checkpoint else [])
     policies = list(dict.fromkeys(policies))
     if not policies:
         raise ValueError("Choose at least one policy.")
