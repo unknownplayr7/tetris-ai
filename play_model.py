@@ -6,7 +6,7 @@ import time
 import torch
 from IPython.display import clear_output
 
-from model import TetrisActorCritic
+from model import TetrisActorCritic, upgrade_legacy_checkpoint
 from tetris_env import TetrisEnv, WIDTH
 
 
@@ -30,6 +30,7 @@ def main():
     device_name = "cuda" if torch.cuda.is_available() else "mps" if has_mps else "cpu"
     device = torch.device(device_name)
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
+    checkpoint = upgrade_legacy_checkpoint(checkpoint)
     model = TetrisActorCritic().to(device)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
