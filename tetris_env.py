@@ -22,15 +22,21 @@ class TetrisEnv:
         self.piece_name = None
         self.shape = None
         self.steps = 0
+        self._bag = []
 
     def reset(self):
         self.board = new_board()
         self.steps = 0
+        self._bag = []
         self._next_piece()
         return self.observation()
 
     def _next_piece(self):
-        self.piece_name = self.rng.choice(PIECE_NAMES)
+        # Match the playable game: each seven-piece bag contains every tetromino once.
+        if not self._bag:
+            self._bag = list(PIECE_NAMES)
+            self.rng.shuffle(self._bag)
+        self.piece_name = self._bag.pop()
         self.shape = [row[:] for row in SHAPES[self.piece_name]]
 
     def observation(self):
@@ -53,7 +59,11 @@ class TetrisEnv:
 
     def step(self, action):
         self.steps += 1
-        rotation_index = int(action) // WIDTH
+        action = int(action)
+        if action < 0 or action >= MAX_ACTIONS:
+            return self.observation(), -5.0, True, {"lines": 0, "invalid": True}
+
+        rotation_index = action // WIDTH
         x = int(action) % WIDTH
         rots = rotations(self.shape)
 
