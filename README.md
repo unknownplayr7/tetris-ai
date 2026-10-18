@@ -50,11 +50,13 @@ The dashboard lets you:
 - Start a fresh run with randomly initialized weights.
 - Choose update count, parallel environments, rollout length, PPO epochs, minibatch size, learning rate, seed, and compute device.
 - Explicitly opt into resuming a checkpoint. Resume is **off by default**.
+- Replay board snapshots of real sampled training actions, including the chosen piece, rotation, column, reward, legal placements, and resulting board.
 - Monitor reward/return, lines cleared, pieces survived, environment steps per second, policy/value losses, entropy, approximate KL divergence, and PPO clip fraction.
+- Read a plain-English glossary explaining PPO, GAE, reward shaping, and optimization metrics.
 - Inspect recent metric rows and trainer logs, and download the metrics file.
 - Stop the training process from the sidebar.
 
-Runs are stored in `runs/ppo-<timestamp>/`, with `metrics.jsonl`, `trainer.log`, and `checkpoint.pt`. Each update appends a JSONL record so the dashboard can follow training live. Checkpoints contain model and optimizer state, update count, and environment-step count.
+Runs are stored in `runs/ppo-<timestamp>/`, with `metrics.jsonl`, `trainer.log`, and `checkpoint.pt`. Each update appends a JSONL record so the dashboard can follow training live. The board replay captures the final sampled action from environment 1 in each update, before PPO optimization; it is real training telemetry, not a separate benchmark game. Checkpoints contain model and optimizer state, update count, and environment-step count.
 
 ### Train from Terminal instead
 
