@@ -34,7 +34,7 @@ def _tail_lines(path, max_lines=5000):
             handle.seek(0, 2)
             position = handle.tell()
             data = b""
-            while position > 0 and data.count(b"\\n") <= max_lines:
+            while position > 0 and data.count(b"\n") <= max_lines:
                 chunk_size = min(8192, position)
                 position -= chunk_size
                 handle.seek(position)
