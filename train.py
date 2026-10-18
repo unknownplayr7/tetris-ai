@@ -22,7 +22,9 @@ def main():
     parser.add_argument("--checkpoint", default="checkpoints/tetris_rl.pt")
     args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    has_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    device_name = "cuda" if torch.cuda.is_available() else "mps" if has_mps else "cpu"
+    device = torch.device(device_name)
     print(f"Using device: {device}")
     if device.type == "cuda":
         print(torch.cuda.get_device_name(0))
