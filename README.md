@@ -1,9 +1,8 @@
 # Tetris AI
 
-A Tetris project with a playable Pygame game, a fast heuristic agent, and an optional
-PyTorch reinforcement-learning agent.
+A Tetris project with a playable Pygame game and a reinforcement-learning lab. The interactive game keeps a heuristic baseline; the RL agent is trained separately from scratch with PPO.
 
-## Play the game
+## Play Tetris
 
 Python 3.10+ is recommended.
 
@@ -11,7 +10,7 @@ Python 3.10+ is recommended.
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\\Scripts\\activate
 python -m pip install pygame numpy
-python main.py                   # Watch the heuristic AI play
+python main.py                   # Watch the heuristic baseline
 python main.py --mode human      # Play yourself
 ```
 
@@ -23,71 +22,82 @@ python main.py --mode human      # Play yourself
 | Down | Soft drop |
 | Up or X | Rotate clockwise |
 | Z | Rotate counter-clockwise |
-| Space | Hard drop in human mode; pause/resume in AI mode |
+| Space | Hard drop in human mode |
 | P | Pause/resume |
-| Tab | Switch between human and AI modes |
+| Tab | Switch modes |
 | R | Restart |
-| + / - | Change game speed |
+| + / - | Change speed |
 | Esc | Quit |
 
-The game includes a ghost landing guide in human mode, a next-piece preview, score/line/level
-stats, a seven-bag piece randomizer, and animated AI placements. The heuristic agent uses a
-one-piece lookahead to consider the next tetromino before committing to a move.
+The game includes a ghost landing guide, next-piece preview, score/line/level stats, seven-bag randomizer, and animated heuristic autoplay.
 
-## Project structure
+## RL lab: train from scratch
 
-- `main.py` - Pygame game UI, human controls, and AI autoplay
-- `board.py` - Board simulation and line clearing
-- `pieces.py` - Tetromino shapes and rotations
-- `ai.py` - Heuristic evaluation and placement search
-- `tetris_env.py` - Placement-based reinforcement-learning environment
-- `model.py` - PyTorch actor-critic neural network
-- `train.py` - Batched actor-critic training loop
-- `play_model.py` - Notebook-friendly viewer for a trained RL model
-- `colab_demo.py` - Notebook-friendly heuristic AI visualization
+The RL system is separate from the heuristic AI. Training uses a PyTorch actor-critic policy optimized with **Proximal Policy Optimization (PPO)**, generalized advantage estimation (GAE), legal-action masking, and reward/optimization telemetry.
 
-## Optional reinforcement-learning agent
+### Technical dashboard (recommended)
 
-Install the full dependencies:
+Install the full dependencies and start the local dashboard:
 
 ```bash
 python -m pip install -r requirements.txt
+streamlit run dashboard.py
 ```
 
-Check PyTorch device support:
+Streamlit prints a local URL, usually `http://localhost:8501`. Open it in your browser.
 
-```python
-import torch
-print("CUDA:", torch.cuda.is_available())
-print("MPS:", hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
-```
+The dashboard lets you:
+- Start a fresh run with randomly initialized weights.
+- Choose update count, parallel environments, rollout length, PPO epochs, minibatch size, learning rate, seed, and compute device.
+- Explicitly opt into resuming a checkpoint. Resume is **off by default**.
+- Replay board snapshots of real sampled training actions, including the chosen piece, rotation, column, reward, legal placements, and resulting board.
+- Monitor reward/return, lines cleared, pieces survived, environment steps per second, policy/value losses, entropy, approximate KL divergence, and PPO clip fraction.
+- Read a plain-English glossary explaining PPO, GAE, reward shaping, and optimization metrics.
+- Inspect recent metric rows and trainer logs, and download the metrics file.
+- Stop the training process from the sidebar.
 
-Train the actor-critic model:
+Runs are stored in `runs/ppo-<timestamp>/`, with `metrics.jsonl`, `trainer.log`, and `checkpoint.pt`. Each update appends a JSONL record so the dashboard can follow training live. The board replay captures the final sampled action from environment 1 in each update, before PPO optimization; it is real training telemetry, not a separate benchmark game. Checkpoints contain model and optimizer state, update count, and environment-step count.
+
+### Train from Terminal instead
+
+A modest starting configuration for an M3 Mac is:
 
 ```bash
-python train.py --updates 1000 --envs 128 --rollout 128
+python train.py --updates 1000 --envs 8 --rollout 128 --device auto
 ```
 
-Training automatically chooses CUDA, Apple Silicon MPS when available, or CPU. Checkpoints
-are saved to `checkpoints/tetris_rl.pt`.
-
-The trainer runs many independent environments in parallel at the Python level, batches the
-network work, masks illegal placements, and stops return bootstrapping at episode boundaries.
-The heuristic agent is ready to run immediately; the reinforcement-learning model must be
-trained before it can be used.
-
-For a trained model in a notebook environment:
+For a small smoke test before a long run:
 
 ```bash
-python play_model.py --checkpoint checkpoints/tetris_rl.pt
+python train.py --updates 2 --envs 2 --rollout 16 --epochs 1 --minibatch-size 32
 ```
+
+The default device selection prefers CUDA when available, then Apple Silicon MPS, then CPU. You can override it with `--device mps`, `--device cpu`, or `--device cuda`.
+
+Each terminal run creates a new timestamped run directory under `runs/` unless `--run-dir` is supplied. To resume intentionally:
+
+```bash
+python train.py --updates 500 --resume runs/ppo-YYYYMMDD-HHMMSS/checkpoint.pt
+```
+
+Replace that example path with the actual checkpoint path. If you do not pass `--resume`, a fresh randomly initialized model is created.
+
+## Project structure
+
+- `main.py` - Pygame game UI and heuristic autoplay
+- `board.py`, `pieces.py` - board simulation and tetromino definitions
+- `ai.py` - heuristic baseline
+- `tetris_env.py` - placement-based RL environment and legal-action masks
+- `model.py` - actor-critic policy/value network
+- `train.py` - fresh-start PPO trainer, GAE, metrics, and checkpointing
+- `dashboard.py` - local Streamlit training dashboard
+- `play_model.py` - simple notebook-oriented model viewer
 
 ## Tests
 
-Run the dependency-light tests with:
-
 ```bash
 python -m unittest discover -s tests -v
+python -m py_compile train.py dashboard.py model.py tetris_env.py
 ```
 
-The CI workflow also checks Python syntax and runs the test suite.
+A trained checkpoint is not included by default. Training is compute-intensive and improvement is not guaranteed; compare multiple seeds and evaluate policies on held-out games before treating a result as better than the heuristic baseline.
