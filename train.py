@@ -93,9 +93,14 @@ def main():
     checkpoint_path = run_dir / "checkpoint.pt"
     config_path = run_dir / "config.json"
     if not config_path.exists():
+        recorded_args = vars(args).copy()
+        # Keep machine-specific absolute paths out of shareable experiment metadata.
+        recorded_args["run_dir"] = run_dir.name
+        if recorded_args.get("resume"):
+            recorded_args["resume"] = Path(recorded_args["resume"]).name
         config = {
             "created_at": datetime.now().isoformat(timespec="seconds"),
-            "args": vars(args),
+            "args": recorded_args,
             "device": str(device),
             "observation_size": OBS_SIZE,
             "action_count": MAX_ACTIONS,
