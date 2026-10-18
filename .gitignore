@@ -1,0 +1,23 @@
+# Python bytecode and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Local training output and model checkpoints
+runs/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Local secrets/configuration
+.env
+.env.*
+!.env.example
+
+# Editor and OS noise
+.DS_Store
+.vscode/
+.idea/
