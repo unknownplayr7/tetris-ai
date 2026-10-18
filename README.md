@@ -45,7 +45,6 @@ one-piece lookahead to consider the next tetromino before committing to a move.
 - `train.py` - Batched actor-critic training loop
 - `play_model.py` - Notebook-friendly viewer for a trained RL model
 - `colab_demo.py` - Notebook-friendly heuristic AI visualization
-- `tools/board_inspector.py` - CLI tool for board metrics (see PR #1)
 
 ## Optional reinforcement-learning agent
 
