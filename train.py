@@ -20,7 +20,7 @@ from board import WIDTH, drop_y
 from pieces import rotations
 from move_log import append_move, open_move_log
 
-from model import OBS_SIZE, TetrisActorCritic
+from model import OBS_SIZE, OBSERVATION_SCHEMA_VERSION, TetrisActorCritic, upgrade_legacy_checkpoint
 from tetris_env import MAX_ACTIONS, TetrisEnv
 
 
@@ -103,6 +103,7 @@ def main():
             "args": recorded_args,
             "device": str(device),
             "observation_size": OBS_SIZE,
+            "observation_schema_version": OBSERVATION_SCHEMA_VERSION,
             "action_count": MAX_ACTIONS,
             "piece_randomizer": "seven-bag",
             "resume_checkpoint_name": Path(args.resume).name if args.resume else None,
@@ -118,6 +119,7 @@ def main():
     start_update = 1
     if args.resume:
         state = torch.load(args.resume, map_location=device, weights_only=True)
+        state = upgrade_legacy_checkpoint(state)
         model.load_state_dict(state["model_state"])
         if "optimizer_state" in state:
             optimizer.load_state_dict(state["optimizer_state"])
@@ -357,6 +359,7 @@ def main():
                 torch.save({
                     "model_state": model.state_dict(),
                     "optimizer_state": optimizer.state_dict(),
+                    "observation_schema_version": OBSERVATION_SCHEMA_VERSION,
                     "update": update,
                     "env_steps": env_steps,
                     "args": vars(args),
