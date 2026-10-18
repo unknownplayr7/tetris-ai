@@ -84,7 +84,7 @@ Replace that example path with the actual checkpoint path. If you do not pass `-
 
 ## Reproducible evaluation and benchmarking
 
-Training reward is a learning signal, not proof that the policy plays better Tetris. Use the evaluator to compare random legal actions, a heuristic using only the current piece, the game's one-piece-lookahead heuristic, and (optionally) a trained PPO checkpoint on the **same held-out episode seeds**. The PPO observation currently includes only the current piece, so the lookahead heuristic has extra preview information; compare it as the real-game baseline, not as an information-matched policy.
+Training reward is a learning signal, not proof that the policy plays better Tetris. Use the evaluator to compare random legal actions, a heuristic using only the current piece, the game's one-piece-lookahead heuristic, and (optionally) a trained PPO checkpoint on the **same held-out episode seeds**. The PPO observation includes the next-piece preview, making the lookahead heuristic a closer information-matched baseline, although their decision algorithms still differ.
 
 Compare the built-in baselines:
 
