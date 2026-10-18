@@ -16,6 +16,9 @@ import numpy as np
 import torch
 from torch.distributions import Categorical
 
+from board import WIDTH, drop_y
+from pieces import rotations
+
 from model import TetrisActorCritic
 from tetris_env import TetrisEnv
 
@@ -110,8 +113,9 @@ def main():
             logprob_buf, reward_buf, done_buf, value_buf = [], [], [], []
             completed_returns, completed_lines, completed_pieces = [], [], []
             entropy_samples = []
+            viz_snapshot = {}
 
-            for _ in range(args.rollout):
+            for rollout_step in range(args.rollout):
                 masks = np.stack([env.valid_action_mask() for env in envs])
                 obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device)
                 mask_t = torch.as_tensor(masks, dtype=torch.bool, device=device)
@@ -124,8 +128,34 @@ def main():
 
                 action_np = actions.cpu().numpy()
                 next_obs, rewards, dones = [], [], []
-                for i, (env, action) in enumerate(zip(envs, action_np)):
-                    new_obs, reward, done, info = env.step(int(action))
+                for i, (env, action_value) in enumerate(zip(envs, action_np)):
+                    action = int(action_value)
+                    capture_viz = rollout_step == args.rollout - 1 and i == 0
+                    if capture_viz:
+                        piece_name = env.piece_name
+                        board_before = [row[:] for row in env.board]
+                        rotation_index = action // WIDTH
+                        x_position = action % WIDTH
+                        rotated_shape = rotations(env.shape)[rotation_index]
+                        landing_y = drop_y(env.board, rotated_shape, x_position)
+                        valid_action_count = int(masks[i].sum())
+
+                    new_obs, reward, done, info = env.step(action)
+                    if capture_viz:
+                        viz_snapshot = {
+                            "viz_board_before": board_before,
+                            "viz_board": [row[:] for row in env.board],
+                            "viz_piece": piece_name,
+                            "viz_shape": rotated_shape,
+                            "viz_rotation": rotation_index,
+                            "viz_x": x_position,
+                            "viz_y": landing_y,
+                            "viz_action": action,
+                            "viz_valid_actions": valid_action_count,
+                            "viz_reward": float(reward),
+                            "viz_lines": int(info.get("lines", 0)),
+                            "viz_done": bool(done),
+                        }
                     episode_returns[i] += reward
                     episode_lines[i] += int(info.get("lines", 0))
                     episode_pieces[i] += 1
@@ -248,6 +278,7 @@ def main():
                 "clip_fraction": float(np.mean(clipfracs)),
                 "advantage_mean": float(b_advantages.mean().item()),
                 "return_mean": float(b_returns.mean().item()),
+                **viz_snapshot,
             }
             metrics_file.write(json.dumps(row) + "\n")
             metrics_file.flush()
