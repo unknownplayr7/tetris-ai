@@ -18,6 +18,7 @@ from torch.distributions import Categorical
 
 from board import WIDTH, drop_y
 from pieces import rotations
+from move_log import append_move, open_move_log
 
 from model import TetrisActorCritic
 from tetris_env import TetrisEnv
@@ -89,7 +90,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, eps=1e-5)
     start_update = 1
     if args.resume:
-        state = torch.load(args.resume, map_location=device)
+        state = torch.load(args.resume, map_location=device, weights_only=True)
         model.load_state_dict(state["model_state"])
         if "optimizer_state" in state:
             optimizer.load_state_dict(state["optimizer_state"])
@@ -99,12 +100,17 @@ def main():
     episode_returns = np.zeros(args.envs, dtype=np.float64)
     episode_lines = np.zeros(args.envs, dtype=np.int64)
     episode_pieces = np.zeros(args.envs, dtype=np.int64)
+    episode_ids = np.full(args.envs, start_update * args.rollout, dtype=np.int64)
+    episode_step_counts = np.zeros(args.envs, dtype=np.int64)
     recent_returns = deque(maxlen=100)
     recent_lines = deque(maxlen=100)
     recent_pieces = deque(maxlen=100)
     env_steps = int(state.get("env_steps", 0)) if args.resume else 0
     run_started = time.time()
     metrics_file = metrics_path.open("a" if args.resume else "w", encoding="utf-8")
+    moves_file, move_index_file = open_move_log(
+        run_dir / "moves.jsonl", run_dir / "moves.idx", append=bool(args.resume)
+    )
 
     try:
         for update in range(start_update, start_update + args.updates):
@@ -130,7 +136,7 @@ def main():
                 next_obs, rewards, dones = [], [], []
                 for i, (env, action_value) in enumerate(zip(envs, action_np)):
                     action = int(action_value)
-                    capture_viz = rollout_step == args.rollout - 1 and i == 0
+                    capture_viz = i == 0  # Keep a complete replay stream for environment 1.
                     if capture_viz:
                         piece_name = env.piece_name
                         board_before = [row[:] for row in env.board]
@@ -139,12 +145,15 @@ def main():
                         rotated_shape = rotations(env.shape)[rotation_index]
                         landing_y = drop_y(env.board, rotated_shape, x_position)
                         valid_action_count = int(masks[i].sum())
+                        move_episode_id = int(episode_ids[i])
+                        move_episode_step = int(episode_step_counts[i])
 
                     new_obs, reward, done, info = env.step(action)
                     if capture_viz:
+                        board_after = [row[:] for row in env.board]
                         viz_snapshot = {
                             "viz_board_before": board_before,
-                            "viz_board": [row[:] for row in env.board],
+                            "viz_board": board_after,
                             "viz_piece": piece_name,
                             "viz_shape": rotated_shape,
                             "viz_rotation": rotation_index,
@@ -156,6 +165,28 @@ def main():
                             "viz_lines": int(info.get("lines", 0)),
                             "viz_done": bool(done),
                         }
+                        append_move(moves_file, move_index_file, {
+                            "move": int(env_steps // args.envs),
+                            "update": int(update),
+                            "rollout_step": int(rollout_step + 1),
+                            "env_index": int(i),
+                            "episode_id": move_episode_id,
+                            "episode_step": move_episode_step,
+                            "piece": piece_name,
+                            "board_before": board_before,
+                            "board_after": board_after,
+                            "shape": rotated_shape,
+                            "rotation": rotation_index,
+                            "x": x_position,
+                            "landing_y": landing_y,
+                            "action": action,
+                            "valid_actions": valid_action_count,
+                            "reward": float(reward),
+                            "lines": int(info.get("lines", 0)),
+                            "done": bool(done),
+                            "invalid": bool(info.get("invalid", False)),
+                        })
+                    episode_step_counts[i] += 1
                     episode_returns[i] += reward
                     episode_lines[i] += int(info.get("lines", 0))
                     episode_pieces[i] += 1
@@ -169,6 +200,8 @@ def main():
                         episode_returns[i] = 0.0
                         episode_lines[i] = 0
                         episode_pieces[i] = 0
+                        episode_ids[i] += 1
+                        episode_step_counts[i] = 0
                         new_obs = env.reset()
                     next_obs.append(new_obs)
                     rewards.append(float(reward))
@@ -304,6 +337,8 @@ def main():
                 }, checkpoint_path)
     finally:
         metrics_file.close()
+        moves_file.close()
+        move_index_file.close()
     print(f"Training finished. Metrics: {metrics_path} | checkpoint: {checkpoint_path}", flush=True)
 
 
