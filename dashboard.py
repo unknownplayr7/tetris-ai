@@ -4,11 +4,8 @@ Run with: streamlit run dashboard.py
 The dashboard starts a separate train.py process and reads its append-only metrics log.
 """
 import json
-import os
-import signal
 import subprocess
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from board import HEIGHT, WIDTH
+from move_log import move_count, read_move_at
 PIECE_COLORS = {"I": "#50d9e7", "O": "#f6ca58", "T": "#bb8aff", "S": "#69df94", "Z": "#ff718b", "J": "#78a6ff", "L": "#ffa05c"}
 
 ROOT = Path(__file__).resolve().parent
@@ -29,20 +27,31 @@ def tail_text(path, lines=35):
         return "No training log yet."
 
 
-def load_metrics(run_dir):
-    path = Path(run_dir) / "metrics.jsonl"
-    if not path.exists():
-        return pd.DataFrame()
-    rows = []
+def _tail_lines(path, max_lines=5000):
+    """Read only the end of a growing log instead of reloading its entire history."""
     try:
-        with path.open(encoding="utf-8") as handle:
-            for line in handle:
-                try:
-                    rows.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+        with Path(path).open("rb") as handle:
+            handle.seek(0, 2)
+            position = handle.tell()
+            data = b""
+            while position > 0 and data.count(b"\\n") <= max_lines:
+                chunk_size = min(8192, position)
+                position -= chunk_size
+                handle.seek(position)
+                data = handle.read(chunk_size) + data
+        return data.splitlines()[-max_lines:]
     except OSError:
-        pass
+        return []
+
+
+def load_metrics(run_dir, max_rows=5000):
+    path = Path(run_dir) / "metrics.jsonl"
+    rows = []
+    for line in _tail_lines(path, max_rows):
+        try:
+            rows.append(json.loads(line.decode("utf-8")))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
     return pd.DataFrame(rows)
 
 
@@ -110,11 +119,12 @@ def board_markup(board, overlay=None, piece_color=None):
 
 
 def landing_overlay(row):
-    shape = row.get("viz_shape")
+    shape = row.get("shape", row.get("viz_shape"))
     if not isinstance(shape, list):
         return set()
     try:
-        x0, y0 = int(row["viz_x"]), int(row["viz_y"])
+        x0 = int(row.get("x", row.get("viz_x")))
+        y0 = int(row.get("landing_y", row.get("viz_y")))
     except (TypeError, ValueError, KeyError):
         return set()
     return {
@@ -208,6 +218,80 @@ elif run_dir:
 else:
     st.info("No run yet. Choose settings on the left and press Start to begin training from scratch.")
 
+
+@st.fragment(run_every=0.5)
+def move_replay(active_run):
+    st.header("Move-by-move replay")
+    if not active_run:
+        st.info("Start training to record moves for replay.")
+        return
+    run_path = Path(active_run)
+    moves_path = run_path / "moves.jsonl"
+    index_path = run_path / "moves.idx"
+    count = move_count(index_path)
+    if count == 0:
+        st.info("Waiting for the first recorded move. The trainer records every placement from its first training environment.")
+        return
+
+    if st.session_state.get("replay_run_dir") != str(run_path):
+        st.session_state.replay_run_dir = str(run_path)
+        st.session_state.replay_move_index = count - 1
+        st.session_state.replay_playing = False
+    if st.session_state.get("replay_move_index", 0) >= count:
+        st.session_state.replay_move_index = count - 1
+
+    if st.session_state.get("replay_playing", False):
+        if st.session_state.replay_move_index < count - 1:
+            st.session_state.replay_move_index += 1
+        else:
+            st.session_state.replay_playing = False
+
+    controls = st.columns([1, 1, 2, 4])
+    if controls[0].button("◀ Previous", key="replay_prev", disabled=st.session_state.replay_move_index <= 0):
+        st.session_state.replay_move_index = max(0, st.session_state.replay_move_index - 1)
+    if controls[1].button("Next ▶", key="replay_next", disabled=st.session_state.replay_move_index >= count - 1):
+        st.session_state.replay_move_index = min(count - 1, st.session_state.replay_move_index + 1)
+    controls[2].toggle("▶ Autoplay", key="replay_playing", help="Advance one recorded move every half-second.")
+    controls[3].caption(f"{count:,} recorded moves · one complete replay stream from training environment 1. Other environments still contribute to learning but are not duplicated into the visual log to keep storage manageable.")
+
+    move_index = st.slider(
+        "Move index", min_value=0, max_value=count - 1,
+        key="replay_move_index",
+        help="Drag this slider to inspect any recorded move. New moves appear as training continues.",
+    )
+    frame = read_move_at(moves_path, index_path, move_index)
+    if not frame:
+        st.warning("That move is not available yet. The log may be updating; try the slider again.")
+        return
+
+    before, after = frame.get("board_before"), frame.get("board_after")
+    piece_name = frame.get("piece")
+    if isinstance(before, list) and isinstance(after, list):
+        board_cols = st.columns(2)
+        with board_cols[0]:
+            st.markdown("**Before move + selected placement**")
+            st.markdown(board_markup(before, landing_overlay(frame), PIECE_COLORS.get(piece_name)), unsafe_allow_html=True)
+        with board_cols[1]:
+            st.markdown("**After move**")
+            st.markdown(board_markup(after), unsafe_allow_html=True)
+
+    metrics = st.columns(6)
+    metrics[0].metric("Piece", str(piece_name or "n/a"))
+    metrics[1].metric("Rotation slot", str(frame.get("rotation", "n/a")))
+    metrics[2].metric("Column", str(frame.get("x", "n/a")))
+    metrics[3].metric("Reward", f"{float(frame.get('reward', 0)):+.3f}")
+    metrics[4].metric("Lines cleared", str(frame.get("lines", 0)))
+    metrics[5].metric("Legal placements", str(frame.get("valid_actions", 0)))
+    st.caption(
+        f"Move {frame.get('move', move_index)} · training update {frame.get('update')} · "
+        f"rollout step {frame.get('rollout_step')} · episode {frame.get('episode_id')}, "
+        f"move {frame.get('episode_step')} · landing row {frame.get('landing_y')} · "
+        f"action ID {frame.get('action')} · "
+        f"{'GAME OVER' if frame.get('done') else 'episode continues'}"
+        + (" · INVALID ACTION" if frame.get("invalid") else "")
+    )
+
+
 @st.fragment(run_every=2)
 def live_telemetry(active_run):
     if not active_run:
@@ -233,33 +317,6 @@ def live_telemetry(active_run):
     value = latest.get("mean_lines_100")
     cols[4].metric("Mean lines · last 100", "n/a" if pd.isna(value) else f"{value:.2f}")
 
-
-    st.header("What the agent is doing")
-    st.markdown("This snapshot is the **last sampled action from environment 1 in this update**, recorded before PPO changes the weights. The left board shows the state before the move with the selected placement overlaid; the right board shows the resulting board after line clearing.")
-    if len(df) > 1:
-        replay_index = st.slider("Replay a recorded update", min_value=0, max_value=len(df) - 1, value=len(df) - 1, help="Scrub through snapshots saved at each training update.")
-    else:
-        replay_index = 0
-    frame = df.iloc[replay_index]
-    before, after = frame.get("viz_board_before"), frame.get("viz_board")
-    piece_name = frame.get("viz_piece")
-    if isinstance(before, list) and isinstance(after, list):
-        board_cols = st.columns(2)
-        with board_cols[0]:
-            st.markdown("**Before move + selected placement**")
-            st.markdown(board_markup(before, landing_overlay(frame), PIECE_COLORS.get(piece_name)), unsafe_allow_html=True)
-        with board_cols[1]:
-            st.markdown("**After move**")
-            st.markdown(board_markup(after), unsafe_allow_html=True)
-        move_cols = st.columns(5)
-        move_cols[0].metric("Piece", str(piece_name or "n/a"))
-        move_cols[1].metric("Rotation slot", str(frame.get("viz_rotation", "n/a")))
-        move_cols[2].metric("Column", str(frame.get("viz_x", "n/a")))
-        move_cols[3].metric("Reward", f"{float(frame.get('viz_reward', 0)):+.3f}")
-        move_cols[4].metric("Lines cleared", str(frame.get("viz_lines", 0)))
-        st.caption(f"Action ID {int(frame.get('viz_action', -1))} · {int(frame.get('viz_valid_actions', 0))} legal placements were available · landing row {frame.get('viz_y', 'n/a')} · {'episode ended' if bool(frame.get('viz_done', False)) else 'episode continues'}.")
-    else:
-        st.info("This run's metrics predate board snapshots. Start a new run to capture gameplay visuals.")
 
     tabs = st.tabs(["Learning", "Optimization", "Episode performance", "Metric glossary", "Run details"])
     with tabs[0]:
@@ -310,7 +367,9 @@ def live_telemetry(active_run):
             "environment_steps": int(latest.get("env_steps", 0)),
             "wall_seconds": latest.get("wall_seconds"),
             "checkpoint_exists": (Path(active_run) / "checkpoint.pt").exists(),
-            "metric_records": len(df),
+            "metric_records_shown": len(df),
+            "total_recorded_moves": move_count(Path(active_run) / "moves.idx"),
+            "move_log_exists": (Path(active_run) / "moves.jsonl").exists(),
         })
         log_path = Path(active_run) / "trainer.log"
         st.subheader("Trainer output")
@@ -320,7 +379,10 @@ def live_telemetry(active_run):
             file_name="metrics.jsonl", mime="application/x-ndjson",
         )
 
+move_replay(run_dir)
+
+st.divider()
 live_telemetry(run_dir)
 
 st.divider()
-st.caption("Local-only dashboard · metrics are recorded in runs/<run-name>/metrics.jsonl · checkpoints are saved inside each run directory.")
+st.caption("Local dashboard · every move from training environment 1 is recorded in runs/<run-name>/moves.jsonl with a seek index; metric charts show the latest 5,000 records to limit memory use. Checkpoints are saved inside each run directory.")
