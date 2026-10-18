@@ -56,7 +56,7 @@ The dashboard lets you:
 - Inspect recent metric rows and trainer logs, and download the metrics file.
 - Stop the training process from the sidebar.
 
-Runs are stored in `runs/ppo-<timestamp>/`, with `metrics.jsonl`, `trainer.log`, and `checkpoint.pt`. Each update appends a JSONL record so the dashboard can follow training live. The board replay captures the final sampled action from environment 1 in each update, before PPO optimization; it is real training telemetry, not a separate benchmark game. Checkpoints contain model and optimizer state, update count, and environment-step count.
+Runs are stored in `runs/ppo-<timestamp>/`, with `metrics.jsonl`, `moves.jsonl`, `moves.idx`, `trainer.log`, and `checkpoint.pt`. The move replay records **every placement from training environment 1**, including the before/after board, chosen piece, rotation, column, landing row, reward, lines, legal-action count, episode ID, and game-over state. Use Previous/Next, the move slider, or autoplay to inspect the sequence. The other parallel environments still train the policy but are not duplicated into the visual log, keeping storage manageable. The fixed-width `moves.idx` file lets the dashboard load a selected move without loading every board into memory. Checkpoints contain model and optimizer state, update count, and environment-step count.
 
 ### Train from Terminal instead
 
@@ -101,3 +101,12 @@ python -m py_compile train.py dashboard.py model.py tetris_env.py
 ```
 
 A trained checkpoint is not included by default. Training is compute-intensive and improvement is not guaranteed; compare multiple seeds and evaluate policies on held-out games before treating a result as better than the heuristic baseline.
+
+
+## Local data and security notes
+
+- Training logs, move replays, and checkpoints stay in the local `runs/` directory unless you manually share them.
+- The dashboard launches the trainer with a subprocess argument list rather than shell command text. It does not need API keys or network access to train.
+- Only load model checkpoints you trust. The trainer and viewer use PyTorch's restricted `weights_only=True` checkpoint loader.
+- Local virtual environments, run outputs, checkpoints, and environment files are excluded by `.gitignore` so they are less likely to be committed accidentally.
+- The source review found no obvious hardcoded API keys, access tokens, private-key blocks, or outbound network calls in the current tracked source. This is a source-tree review, not a guarantee about the entire Git history or GitHub account; rotate any credential that may have been committed in the past.
